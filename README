@@ -1,0 +1,45 @@
+
+glfs-health.sh - Tool to inspect the health of a GlusterFS server
+==============
+
+Usage:
+   sh# glfs-health.sh [SERVERIP [SERVERPORT [TRANSPORT [VOLNAME]]]]
+
+The tool inspects the health of the GlusterFS server volume VOLNAME running on
+the host SERVERIP on port SERVERPORT using the transport mechanism TRANSPORT.
+
+The default four parameters are initialized in the script. They can be overriden
+from the command line as shown above.
+
+The health of the service is written to stdout. The possible output messages:
+
+-- "OK"
+   The server is healthy and capable of handling client connections.
+
+-- "Connection refused"
+   The machine is reachable, but GlusterFS is not running on the requested port.
+   Possible reasons include GlusterFS not yet being started, or GlusterFS server
+   has crashed.
+
+-- "Host unreachable"
+   The machine is unreachable. Very likely to be shutdown, or network interface
+   has gone down on the server.
+
+-- "Server Unresponsive"
+   The machine is reachable. Connection could be established at the transport
+   level but GlusterFS server is not responding. This could happen for at least
+   two reasons.
+    1) The OS has softlocked certain subsystems but networking is operational
+    2) GlusterFS has deadlocked itself due to a bug
+
+-- "Unknown service encountered"
+   The service running on the requested HOST and PORT is not a GlusterFS service
+
+-- "Authentication failed"
+-- remote-subvolume "adsf" is not found
+   Server is operational as such, but the might be misconfigured or the tool is
+   invoked as non-root or with wrong parameters
+
+-- "No version number specified"
+   Server is a an old version and mismatching with the client
+
