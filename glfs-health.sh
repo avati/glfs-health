@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #
 # Usage: $0 [HOST [PORT [TRANSPORT [VOLUME]]]]
@@ -108,7 +108,7 @@ function watsup()
             break
         fi
 
-        usleep 300000
+        sleep 0.3
     done
 
     echo $ans
