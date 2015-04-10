@@ -1,16 +1,16 @@
 #!/bin/bash
 
 #
-# Usage: $0 [HOST [PORT [TRANSPORT [VOLUME]]]]
+# Usage: $0 VOLUME [HOST [TRANSPORT]]
 #
 
 DEFAULT_HOST=localhost
 DEFAULT_PORT=6996
 DEFAULT_TYPE=tcp
-DEFAULT_NAME=client
+DEFAULT_NAME=test
 
 
-conf=/tmp/.glusterfs.vol.$$;
+mnt=/tmp/.glusterfs.mnt.$$;
 log=/tmp/.glusterfs.log.$$;
 pid=/tmp/.glusterfs.pid.$$;
 glfs=`which glusterfs 2>/dev/null`;
@@ -25,71 +25,62 @@ function parse_cmd_args()
     NAME=$DEFAULT_NAME;
 
     if test "x$1" != "x"; then
-        HOST=$1
+        NAME=$1
     fi
 
     if test "x$2" != "x"; then
-        PORT=$2
+        HOST=$2
     fi
 
     if test "x$3" != "x"; then
         TYPE=$3
     fi
-
-    if test "x$4" != "x"; then
-        NAME=$4
-    fi
-}
-
-
-function spit_vol()
-{
-cat > $conf <<EOF
-
-volume client
-  type protocol/client
-  option remote-host $HOST
-  option remote-port $PORT
-  option transport-type $TYPE
-  option remote-subvolume $NAME
-  option ping-timeout 2
-end-volume
-
-volume server
-  type protocol/server
-  option transport-type tcp
-  option auth.addr.client.allow *
-  subvolumes client
-end-volume
-
-EOF
 }
 
 
 function glfs()
 {
-    $glfs -f $conf -l $log -p $pid -LTRACE
+    mkdir -p $mnt;
+    $glfs -s $HOST --volfile-id $NAME -l $log -p $pid -LTRACE $mnt &
+    sleep 0.3;
 }
 
 
 function cleanup()
 {
-    kill -TERM `cat $pid`;
-    rm -rf $conf $log $pid;
+    [ -f $pid ] && kill -TERM `cat $pid`;
+    umount -l $mnt >/dev/null 2>&1;
+    rm -rf $conf $pid #$log;
+    rmdir $mnt;
 }
 
 
 function watsup()
 {
-    ans="Host unreachable"
+    ans="Unknown Error"
 
     for i in $(seq 1 10); do
+	if grep -iq "failed to fetch volume file (key:$NAME)" $log; then
+	    ans="Volume $NAME does not exist"
+	    break;
+	fi
+
+	if grep -iq 'failed to get the port number for remote subvolume' $log; then
+	    ans="Volume $NAME is not started"
+	    break;
+	fi
+
+	if grep -iq 'DNS resolution failed on host' $log; then
+	    ans=$(sed -n s/'.*DNS resolution failed on host '/'DNS resolution failed: '/p $log | tail -n 1);
+	    break
+	fi
+
         if grep -iq 'connection refused' $log; then
-            ans="Connection refused"
+            ans=$(sed -n s/'.*connection to \([^ ]*\) failed (Connection refused).*'/'Brick \1 crashed'/p $log | tail -n 1)
             break
         fi
 
-        if grep -iq 'client: got GF_EVENT_CHILD_UP' $log; then
+        if grep -iq ': got RPC_CLNT_CONNECT' $log; then
             ans="Server Unresponsive"
         fi
 
@@ -98,8 +89,8 @@ function watsup()
             break
         fi
 
-        if grep -iq 'client: SETVOLUME on remote-host failed:' $log; then
-            ans=$(sed -n s/'.*client: SETVOLUME on remote-host failed: '//p $log | tail -n 1);
+        if grep -iq ': SETVOLUME on remote-host failed:' $log; then
+            ans=$(sed -n s/'.*: SETVOLUME on remote-host failed: '//p $log | tail -n 1);
             break
         fi
 
@@ -121,7 +112,6 @@ function main()
 
     parse_cmd_args "$@"
 
-    spit_vol;
     glfs;
 
     watsup;
